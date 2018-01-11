@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use QL\QueryList;
@@ -19,6 +20,8 @@ class QueryListController extends Controller
                 <div>
                     <a href="https://querylist.cc/2.html">这是链接二</a>
                     <span>这是文字二</span>
+                    <span>这是文字二.二</span>
+                    <span>这是文字二.二.二</span>
                 </div>
                 <div>
                     <a href="https://querylist.cc/1.html">这是链接三</a>
@@ -36,7 +39,9 @@ STR;
             'txt' => ['span','text']
         ];
         $range='.content>div';
-        $ql = QueryList::html($html)->rules($rules)->range($range)->query();
+        $ql = QueryList::html($html)->rules($rules)->range($range)->query(function($item){
+            return $item;
+        });
         $data = $ql->getData();
         dd($data->all());
     }
@@ -295,6 +300,95 @@ STR;
 //            ]
 //        ]);
 //        echo $res->getStatusCode();
+
+    }
+
+    //获取拍卖分类
+    public function getAuctionCategory()
+    {
+        $url="https://auctions.yahoo.co.jp/list1/jp/0-all.html#23336";
+        $range='.acMdSiteMapList > div > div > dl';
+//        $rules = [
+//            //采集一级分类a标签的text文本
+//            'first_txt' => ['.decSiteMapListTl > h2 > a','text'],
+//            //采集二级分类a标签text的文本
+//            'sec_txt' => ['dd:not(".decSiteMapListTl") > a','text'],
+//            //采集二级分类a标签的href属性
+//            'sec_href' => ['dd:not(".decSiteMapListTl") a','href']
+//        ];
+//
+//        $ql = QueryList::get($url)->range($range)->rules($rules)->query(function($item){
+//            return $item;
+//        });
+//        $data = $ql->getData()->all();
+
+        //一级分类标题
+        $html=QueryList::get($url);
+        $first_title=$html->find('.decSiteMapListTl > h2')
+            ->texts()
+            ->mapWithKeys(function($item){
+                static $i=0;
+                $i++;
+
+                return [$item => $i];
+            });
+//        dd($first_title->all());
+        //所有二级分类标题
+        $sec_title=$html->find('.acMdSiteMapList > div > div > dl > dd >a')
+            ->texts();
+        //所有二级分类对应的链接
+        $sec_href=$html->range($range)->find('dd >a')
+            ->attrs('href');
+        dd($sec_href);
+    }
+
+    //api获取分类测试
+    public function getCategory($category_id = 0)
+    {
+        $url='https://auctions.yahooapis.jp/AuctionWebService/V2/categoryTree?appid=dj00aiZpPVo4WUpTVHdnWmN0eSZzPWNvbnN1bWVyc2VjcmV0Jng9MDQ-&category='.$category_id;
+        $xml=simplexml_load_file($url);
+        $arr=json_decode(\GuzzleHttp\json_encode($xml));
+        return $arr->Result;
+    }
+
+    public function showCategory($category_id = 0,$lev = 0)
+    {
+        $res=$this->getCategory($category_id);
+        $parent_category_id=isset($res->ParentCategoryId)?$res->ParentCategoryId:'';
+        $yh_category_id=$res->CategoryId;
+        $category_name_jp=$res->CategoryName;
+        $child_category_num=isset($res->ChildCategoryNum)?$res->ChildCategoryNum:0;
+
+        $arr=array();
+        $arr[]=array(
+            'lev' => $lev,
+            'yh_category_id' => $yh_category_id,
+            'child_category_num' => $child_category_num,
+            'name_jp' => $category_name_jp,
+            'yh_parent_category_id' => $parent_category_id,
+        );
+//        print_r($arr);
+
+        if($child_category_num>0 && $lev <= 0){
+            foreach($res->ChildCategory as $child_category){
+                $category_id=$child_category->CategoryId;
+                $data=$this->showCategory($category_id, $lev+1);
+                $arr=!empty($data)?array_merge($arr,$data):$arr;
+            }
+        }
+
+        return $arr;
+    }
+
+    public function index()
+    {
+//        echo "<pre>";
+        $data=$this->showCategory(0);
+        dd($data);
+//        foreach($data as $v){
+//
+//        }
+
 
 
     }
