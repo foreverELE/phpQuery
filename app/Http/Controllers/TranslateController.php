@@ -11,7 +11,7 @@ class TranslateController extends Controller
     public function index()
     {
 
-        $res=Translation::translate('苹果', 'zh', 'en');
+        $res=Translation::translate('apple');
         dd($res);
     }
 
